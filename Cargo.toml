@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/json-vis-core", "src-tauri"]
+resolver = "2"

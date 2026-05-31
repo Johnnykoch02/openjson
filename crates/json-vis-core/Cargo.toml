@@ -1,0 +1,17 @@
+[package]
+name = "json-vis-core"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance JSON parsing, schema inference, and diff engine"
+license = "AGPL-3.0-or-later"
+authors = ["Jonathan Koch"]
+
+[[bin]]
+name = "json-vis-bench"
+path = "src/bin/bench.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+simd-json = "0.14"
+indexmap = { version = "2", features = ["serde"] }

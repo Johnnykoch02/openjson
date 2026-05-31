@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenJSON — Free JSON visualizer & LLM output diff</title>
+    <meta
+      name="description"
+      content="OpenJSON is a free, open-source desktop app for visualizing large JSON datasets, inspecting nested values, and comparing LLM model outputs. Local-first. No account, no upload, no cost."
+    />
+    <meta property="og:title" content="OpenJSON — Free JSON visualizer & LLM output diff" />
+    <meta
+      property="og:description"
+      content="Visualize, inspect and compare JSON & LLM outputs. Free, open-source, local-first."
+    />
+    <style>
+      :root {
+        --bg: #08080b;
+        --surface: #101013;
+        --surface-2: #17171c;
+        --surface-3: #1d1d23;
+        --border: #232329;
+        --border-strong: #32323b;
+        --text: #ededf2;
+        --text-dim: #a0a0ab;
+        --muted: #6b6b78;
+        --accent: #6e7bff;
+        --violet: #9d6bff;
+        --green: #51cf66;
+        --coffee1: #ffb02e;
+        --coffee2: #ff8a3d;
+        --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+      header.nav {
+        position: sticky; top: 0; z-index: 10;
+        backdrop-filter: blur(14px);
+        background: rgba(8, 8, 11, 0.7);
+        border-bottom: 1px solid var(--border);
+      }
+      .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+      .brand .mark {
+        width: 30px; height: 30px; border-radius: 8px;
+        background: linear-gradient(135deg, var(--accent), var(--violet));
+        display: grid; place-items: center; color: #fff; font-family: var(--mono); font-size: 14px;
+      }
+      .nav-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
+      .nav-links a { color: var(--text-dim); }
+      .nav-links a:hover { color: var(--text); }
+
+      .hero { text-align: center; padding: 96px 0 60px; position: relative; overflow: hidden; }
+      .hero::before {
+        content: ""; position: absolute; inset: -40% 0 auto 0; height: 480px;
+        background: radial-gradient(60% 60% at 50% 0%, rgba(110,123,255,0.18), transparent 70%);
+        pointer-events: none;
+      }
+      .hero h1 {
+        font-size: clamp(34px, 6vw, 58px); font-weight: 700; letter-spacing: -0.03em;
+        margin: 0 0 18px; line-height: 1.05;
+        background: linear-gradient(180deg, #fff, #aeaebd);
+        -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      }
+      .hero p.sub { font-size: clamp(16px, 2.4vw, 20px); color: var(--text-dim); max-width: 660px; margin: 0 auto 32px; }
+      .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+      .btn {
+        display: inline-flex; align-items: center; gap: 9px; padding: 13px 22px; border-radius: 12px;
+        font-weight: 600; font-size: 15px; cursor: pointer; border: 1px solid var(--border-strong);
+        background: var(--surface-2); color: var(--text); transition: transform .05s, filter .12s, background .12s;
+      }
+      .btn:hover { background: var(--surface-3); }
+      .btn:active { transform: translateY(1px); }
+      .btn.primary { background: linear-gradient(135deg, var(--accent), var(--violet)); border-color: transparent; color: #fff; }
+      .btn.primary:hover { filter: brightness(1.07); }
+      .btn.coffee { background: linear-gradient(135deg, var(--coffee1), var(--coffee2)); border-color: transparent; color: #20150a; }
+      .btn.coffee:hover { filter: brightness(1.06); }
+      .hint { margin-top: 14px; font-size: 13px; color: var(--muted); }
+
+      .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 30px 0 0; }
+      .badge { font-size: 12.5px; color: var(--text-dim); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; background: var(--surface); }
+      .badge b { color: var(--green); }
+
+      section { padding: 56px 0; }
+      h2.section-title { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 0 0 8px; }
+      p.section-sub { text-align: center; color: var(--text-dim); margin: 0 auto 36px; max-width: 560px; }
+
+      .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .dl-card {
+        border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
+        padding: 26px 22px; text-align: center; transition: border-color .15s, transform .15s;
+      }
+      .dl-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+      .dl-os { font-size: 34px; margin-bottom: 8px; }
+      .dl-card h3 { margin: 0 0 4px; font-size: 17px; }
+      .dl-card .arch { font-size: 12.5px; color: var(--muted); margin-bottom: 16px; }
+      .dl-card .btn { width: 100%; justify-content: center; }
+      .dl-card .filemeta { margin-top: 10px; font-size: 11.5px; color: var(--muted); font-family: var(--mono); min-height: 16px; }
+
+      .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      .feature { border: 1px solid var(--border); border-radius: 14px; background: var(--surface); padding: 22px; }
+      .feature h3 { margin: 0 0 6px; font-size: 16px; }
+      .feature p { margin: 0; color: var(--text-dim); font-size: 14px; }
+
+      .support {
+        border: 1px solid var(--border); border-radius: 18px;
+        background: linear-gradient(135deg, rgba(255,176,46,0.08), rgba(255,138,61,0.04));
+        padding: 40px; text-align: center;
+      }
+      .support h2 { font-size: 26px; margin: 0 0 10px; }
+      .support p { color: var(--text-dim); max-width: 520px; margin: 0 auto 24px; }
+
+      .license-note {
+        border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
+        padding: 22px 26px; font-size: 14px; color: var(--text-dim);
+      }
+      .license-note b { color: var(--text); }
+      .license-note code { font-family: var(--mono); background: var(--surface-3); padding: 1px 6px; border-radius: 5px; color: var(--text); }
+
+      footer { border-top: 1px solid var(--border); padding: 30px 0 50px; color: var(--muted); font-size: 13px; }
+      .foot-inner { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+      .foot-inner a { color: var(--text-dim); }
+
+      @media (max-width: 760px) {
+        .downloads, .features { grid-template-columns: 1fr; }
+        .nav-links a:not(.btn) { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="wrap nav-inner">
+        <div class="brand"><span class="mark">{}</span> OpenJSON</div>
+        <nav class="nav-links">
+          <a href="#download">Download</a>
+          <a href="#features">Features</a>
+          <a id="repo-link" href="#">GitHub</a>
+          <a class="btn coffee" id="coffee-nav" href="https://buymeacoffee.com/johnnykoch0" target="_blank" rel="noopener">☕ Donate</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="wrap">
+          <h1>See your JSON.<br />Judge your models.</h1>
+          <p class="sub">
+            A free, open-source desktop app for visualizing large JSON datasets, inspecting deeply
+            nested values, and comparing LLM model outputs side by side. Local-first — your data
+            never leaves your machine.
+          </p>
+          <div class="cta-row">
+            <a class="btn primary" id="hero-download" href="#download">⬇ Download for your OS</a>
+            <a class="btn coffee" href="https://buymeacoffee.com/johnnykoch0" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+          </div>
+          <div class="hint" id="hero-version">Loading latest release…</div>
+          <div class="badges">
+            <span class="badge"><b>$0</b> · always free</span>
+            <span class="badge">no account</span>
+            <span class="badge">no upload</span>
+            <span class="badge">open source</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="download">
+        <div class="wrap">
+          <h2 class="section-title">Download</h2>
+          <p class="section-sub">Latest stable release. Pick your platform — installation is one click.</p>
+          <div class="downloads">
+            <div class="dl-card">
+              <div class="dl-os">🪟</div>
+              <h3>Windows</h3>
+              <div class="arch">x64 · .msi / .exe</div>
+              <a class="btn primary" id="dl-windows" href="#" target="_blank" rel="noopener">Download</a>
+              <div class="filemeta" id="meta-windows"></div>
+            </div>
+            <div class="dl-card">
+              <div class="dl-os">🍎</div>
+              <h3>macOS</h3>
+              <div class="arch">Universal (Intel + Apple Silicon) · .dmg</div>
+              <a class="btn primary" id="dl-macos" href="#" target="_blank" rel="noopener">Download</a>
+              <div class="filemeta" id="meta-macos"></div>
+            </div>
+            <div class="dl-card">
+              <div class="dl-os">🐧</div>
+              <h3>Ubuntu / Linux</h3>
+              <div class="arch">x64 · .AppImage / .deb</div>
+              <a class="btn primary" id="dl-linux" href="#" target="_blank" rel="noopener">Download</a>
+              <div class="filemeta" id="meta-linux"></div>
+            </div>
+          </div>
+          <p class="hint" style="text-align:center" id="all-releases">
+            Looking for older versions or other formats? Browse all releases.
+          </p>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="wrap">
+          <h2 class="section-title">Built for real data work</h2>
+          <p class="section-sub">Made for data enrichment and evaluating where models win or fail.</p>
+          <div class="features">
+            <div class="feature">
+              <h3>LLM output comparison</h3>
+              <p>Overall agreement score, per-field divergence ranking, and full side-by-side records keyed by any field you choose.</p>
+            </div>
+            <div class="feature">
+              <h3>Deep value inspection</h3>
+              <p>Expand nested objects by default, then open a side panel that renders HTML & Markdown beautifully — with clickable source links.</p>
+            </div>
+            <div class="feature">
+              <h3>Implicit schema inference</h3>
+              <p>Detect field types, nullability and coverage across thousands of records to catch schema drift and quality issues fast.</p>
+            </div>
+            <div class="feature">
+              <h3>Fast on large files</h3>
+              <p>A Rust core parses multi-megabyte JSON in milliseconds and streams only what the UI needs, so it stays smooth.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <div class="support">
+            <h2>This tool is free. Forever.</h2>
+            <p>
+              No paywalls, no upload limits, no account. If OpenJSON saves you time, the best way to
+              say thanks is a coffee — it directly funds continued development.
+            </p>
+            <a class="btn coffee" href="https://buymeacoffee.com/johnnykoch0" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <div class="license-note">
+            <b>License — GNU AGPL-3.0.</b> You are free to download, use, study, and modify OpenJSON
+            for any purpose, including at work. If you run a modified version as a network service or
+            distribute it, you must release your source under the same license. In short: it stays
+            free and open for everyone, and <b>no one can take it closed-source or resell it</b> as a
+            proprietary product. See <code>LICENSE</code> for the full text.
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap foot-inner">
+        <span>© <span id="year"></span> Jonathan Koch · OpenJSON · AGPL-3.0</span>
+        <span>
+          <a id="footer-repo" href="#">GitHub</a> ·
+          <a href="https://buymeacoffee.com/johnnykoch0" target="_blank" rel="noopener">Donate</a>
+        </span>
+      </div>
+    </footer>
+
+    <script>
+      // ── Configure your GitHub repo here (owner/name) ──
+      const REPO = "johnnykoch0/openjson";
+      const repoUrl = "https://github.com/" + REPO;
+      const releasesUrl = repoUrl + "/releases";
+
+      document.getElementById("year").textContent = new Date().getFullYear();
+      for (const id of ["repo-link", "footer-repo"]) document.getElementById(id).href = repoUrl;
+      document.getElementById("all-releases").innerHTML =
+        'Looking for older versions or other formats? <a href="' + releasesUrl + '">Browse all releases →</a>';
+
+      const platforms = {
+        windows: { exts: [".msi", ".exe"], el: "dl-windows", meta: "meta-windows" },
+        macos: { exts: [".dmg", ".app.tar.gz"], el: "dl-macos", meta: "meta-macos" },
+        linux: { exts: [".appimage", ".deb"], el: "dl-linux", meta: "meta-linux" },
+      };
+
+      function setFallback() {
+        for (const key in platforms) {
+          document.getElementById(platforms[key].el).href = releasesUrl;
+        }
+      }
+
+      function fmtSize(bytes) {
+        if (!bytes) return "";
+        const mb = bytes / 1024 / 1024;
+        return mb >= 1 ? mb.toFixed(1) + " MB" : (bytes / 1024).toFixed(0) + " KB";
+      }
+
+      function detectOS() {
+        const p = (navigator.userAgent + " " + navigator.platform).toLowerCase();
+        if (p.includes("win")) return "windows";
+        if (p.includes("mac")) return "macos";
+        return "linux";
+      }
+
+      fetch("https://api.github.com/repos/" + REPO + "/releases/latest")
+        .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+        .then((release) => {
+          const assets = release.assets || [];
+          document.getElementById("hero-version").innerHTML =
+            "Latest: <strong>" + (release.tag_name || "release") + "</strong> · released " +
+            new Date(release.published_at).toLocaleDateString();
+
+          for (const key in platforms) {
+            const { exts, el, meta } = platforms[key];
+            const match = assets.find((a) =>
+              exts.some((ext) => a.name.toLowerCase().endsWith(ext)),
+            );
+            const btn = document.getElementById(el);
+            if (match) {
+              btn.href = match.browser_download_url;
+              document.getElementById(meta).textContent = match.name + " · " + fmtSize(match.size);
+            } else {
+              btn.href = releasesUrl;
+              document.getElementById(meta).textContent = "see releases";
+            }
+          }
+
+          const os = detectOS();
+          const hero = document.getElementById("hero-download");
+          const labels = { windows: "Windows", macos: "macOS", linux: "Linux" };
+          hero.textContent = "⬇ Download for " + labels[os];
+          hero.href = document.getElementById(platforms[os].el).href;
+        })
+        .catch(() => {
+          setFallback();
+          document.getElementById("hero-version").innerHTML =
+            'No published release yet — <a href="' + releasesUrl + '">check releases →</a>';
+          document.getElementById("hero-download").href = releasesUrl;
+        });
+    </script>
+  </body>
+</html>
