@@ -264,13 +264,7 @@ fn preview_value(value: &Value) -> Option<String> {
         Value::Null => Some("null".to_string()),
         Value::Bool(v) => Some(v.to_string()),
         Value::Number(v) => Some(v.to_string()),
-        Value::String(v) => {
-            if v.len() > 80 {
-                Some(format!("\"{}…\"", &v[..77]))
-            } else {
-                Some(format!("\"{v}\""))
-            }
-        }
+        Value::String(v) => Some(format!("\"{}\"", crate::util::truncate_chars(v, 77))),
         Value::Array(items) => Some(format!("[{} items]", items.len())),
         Value::Object(map) => Some(format!("{{{}}} keys", map.len())),
     }

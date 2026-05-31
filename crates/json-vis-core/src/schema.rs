@@ -153,11 +153,7 @@ fn truncate_sample(value: &serde_json::Value) -> String {
         serde_json::Value::String(s) => s.clone(),
         other => other.to_string(),
     };
-    if raw.len() > 120 {
-        format!("{}…", &raw[..117])
-    } else {
-        raw
-    }
+    crate::util::truncate_chars(&raw, 117)
 }
 
 pub fn infer_schema(value: &serde_json::Value, byte_size: u64) -> InferredSchema {
@@ -245,5 +241,17 @@ mod tests {
         assert_eq!(schema.record_count, 2);
         assert!(schema.fields.iter().any(|f| f.name == "id"));
         assert!(schema.fields.iter().any(|f| f.name == "tags" && f.nullable));
+    }
+
+    #[test]
+    fn infers_array_of_objects_with_unicode_samples() {
+        let value = json!([
+            {"title": "日本語・エンジニア / Japanese Engineer"},
+            {"title": "Staff Platform Engineer"},
+        ]);
+        let schema = infer_schema(&value, 100);
+        assert_eq!(schema.record_count, 2);
+        let title = schema.fields.iter().find(|f| f.name == "title").unwrap();
+        assert!(!title.sample_values.is_empty());
     }
 }

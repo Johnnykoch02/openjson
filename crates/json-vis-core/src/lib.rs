@@ -3,6 +3,7 @@ pub mod graph;
 pub mod parse;
 pub mod query;
 pub mod schema;
+pub mod util;
 
 pub use diff::{
     candidate_key_fields, diff_records, diff_schemas, find_record, FieldAgreement, RecordDiff,

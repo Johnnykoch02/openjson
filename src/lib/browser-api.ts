@@ -109,7 +109,7 @@ class FieldAcc {
         }
       }
     } else if (this.samples.length < 5) {
-      const sample = truncate(String(value));
+      const sample = truncate(String(value), 117);
       if (!this.samples.includes(sample)) this.samples.push(sample);
     }
   }
@@ -144,8 +144,10 @@ function inferObjectFields(
   });
 }
 
-function truncate(value: string): string {
-  return value.length > 120 ? `${value.slice(0, 117)}…` : value;
+function truncate(value: string, maxChars: number): string {
+  const chars = [...value];
+  if (chars.length <= maxChars) return value;
+  return chars.slice(0, maxChars).join("") + "…";
 }
 
 function parseDocument(name: string, text: string): JsonValue {
@@ -524,7 +526,7 @@ function makeNode(
 function preview(value: JsonValue): string | null {
   if (value === null) return "null";
   if (typeof value === "boolean" || typeof value === "number") return String(value);
-  if (typeof value === "string") return value.length > 80 ? `"${value.slice(0, 77)}…"` : `"${value}"`;
+  if (typeof value === "string") return `"${truncate(value, 77)}"`;
   if (Array.isArray(value)) return `[${value.length} items]`;
   if (typeof value === "object") return `{${Object.keys(value).length} keys}`;
   return null;
