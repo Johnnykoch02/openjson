@@ -195,8 +195,9 @@ fn walk(
             }
         }
         Value::Array(items) => {
-            let limit = items.len().min(50);
-            for (index, child) in items.iter().take(limit).enumerate() {
+            // Respect the global node budget only — no separate per-array cap.
+            // Large arrays (e.g. 2k records) will fill up to max_nodes, then stop.
+            for (index, child) in items.iter().enumerate() {
                 if *counter >= max_nodes {
                     *truncated = true;
                     return;
@@ -230,9 +231,6 @@ fn walk(
                     counter,
                     truncated,
                 );
-            }
-            if items.len() > limit {
-                *truncated = true;
             }
         }
         _ => {}

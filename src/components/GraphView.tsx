@@ -33,6 +33,8 @@ interface GraphViewProps {
   documentId: string | null;
 }
 
+const GRAPH_MAX_NODES = 99999;
+
 export function GraphView({ documentId }: GraphViewProps) {
   const [rawNodes, setRawNodes] = useState<GraphNode[]>([]);
   const [rawEdges, setRawEdges] = useState<GraphEdge[]>([]);
@@ -59,7 +61,7 @@ export function GraphView({ documentId }: GraphViewProps) {
     }
     let cancelled = false;
     setLoading(true);
-    getGraph(documentId, 400, 1)
+    getGraph(documentId, GRAPH_MAX_NODES, 1)
       .then((snapshot) => {
         if (cancelled) return;
         setRawNodes(snapshot.nodes);
@@ -100,7 +102,7 @@ export function GraphView({ documentId }: GraphViewProps) {
   const expand = useCallback(
     async (node: GraphNode) => {
       if (!documentId) return;
-      const snapshot = await expandGraphPath(documentId, node.path, 400);
+      const snapshot = await expandGraphPath(documentId, node.path, GRAPH_MAX_NODES);
       setRawNodes((nodes) => {
         const seen = new Set(nodes.map((n) => n.id));
         const additions = snapshot.nodes.filter((n) => !seen.has(n.id));
@@ -156,7 +158,11 @@ export function GraphView({ documentId }: GraphViewProps) {
           {rawNodes.length} nodes · click <strong>+</strong> to expand
         </span>
         {loading && <span className="graph-status-loading">loading…</span>}
-        {truncated && <span className="graph-status-warn">large level truncated</span>}
+        {truncated && (
+          <span className="graph-status-warn">
+            capped at {GRAPH_MAX_NODES.toLocaleString()} nodes — use <strong>Data</strong> for full list
+          </span>
+        )}
       </div>
       <ReactFlowProvider>
         <ReactFlow

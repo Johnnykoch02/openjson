@@ -482,7 +482,7 @@ function walk(
   if (depth <= 0) return;
 
   if (Array.isArray(value)) {
-    for (const [index, child] of value.slice(0, 50).entries()) {
+    for (const [index, child] of value.entries()) {
       if (shouldStop()) return;
       const path = `${parentPath}[${index}]`;
       const id = path.replace(/[.[\]]/g, "_");
