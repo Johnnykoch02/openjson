@@ -42,6 +42,130 @@ pub struct GraphSnapshot {
     pub total_nodes: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChildrenSlice {
+    pub parent_path: String,
+    pub parent_id: String,
+    pub total_children: u32,
+    pub offset: u32,
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    pub has_more: bool,
+}
+
+pub fn list_children(value: &Value, path: &str, offset: u32, limit: u32) -> ChildrenSlice {
+    let target = resolve_path(value, path);
+    let parent_id = path_to_id(path);
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+
+    let limit = limit.max(1);
+
+    match target {
+        Value::Object(map) => {
+            let total = map.len() as u32;
+            for (index, (key, child)) in map.iter().enumerate() {
+                if index < offset as usize {
+                    continue;
+                }
+                if nodes.len() as u32 >= limit {
+                    break;
+                }
+                let child_path = if path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{path}.{key}")
+                };
+                let id = path_to_id(&child_path);
+                nodes.push(make_node(
+                    &id,
+                    key.clone(),
+                    NodeKind::Property,
+                    &child_path,
+                    child,
+                    child_count(child),
+                    is_expandable(child),
+                ));
+                edges.push(GraphEdge {
+                    id: format!("{parent_id}-{id}"),
+                    source: parent_id.clone(),
+                    target: id.clone(),
+                    label: Some(key.clone()),
+                });
+            }
+            let returned = nodes.len() as u32;
+            ChildrenSlice {
+                parent_path: path.to_string(),
+                parent_id,
+                total_children: total,
+                offset,
+                nodes,
+                edges,
+                has_more: offset + returned < total,
+            }
+        }
+        Value::Array(items) => {
+            let total = items.len() as u32;
+            for (index, child) in items.iter().enumerate() {
+                if index < offset as usize {
+                    continue;
+                }
+                if nodes.len() as u32 >= limit {
+                    break;
+                }
+                let child_path = if path.is_empty() {
+                    format!("[{index}]")
+                } else {
+                    format!("{path}[{index}]")
+                };
+                let id = path_to_id(&child_path);
+                nodes.push(make_node(
+                    &id,
+                    format!("[{index}]"),
+                    NodeKind::Item,
+                    &child_path,
+                    child,
+                    child_count(child),
+                    is_expandable(child),
+                ));
+                edges.push(GraphEdge {
+                    id: format!("{parent_id}-{id}"),
+                    source: parent_id.clone(),
+                    target: id.clone(),
+                    label: Some(format!("[{index}]")),
+                });
+            }
+            let returned = nodes.len() as u32;
+            ChildrenSlice {
+                parent_path: path.to_string(),
+                parent_id,
+                total_children: total,
+                offset,
+                nodes,
+                edges,
+                has_more: offset + returned < total,
+            }
+        }
+        _ => ChildrenSlice {
+            parent_path: path.to_string(),
+            parent_id,
+            total_children: 0,
+            offset,
+            nodes,
+            edges,
+            has_more: false,
+        },
+    }
+}
+
+fn path_to_id(path: &str) -> String {
+    if path.is_empty() {
+        "root".to_string()
+    } else {
+        path.replace(['.', '[', ']'], "_")
+    }
+}
+
 pub fn build_graph(value: &Value, max_nodes: u32, expand_depth: u32) -> GraphSnapshot {
     let mut nodes = Vec::new();
     let mut edges = Vec::new();

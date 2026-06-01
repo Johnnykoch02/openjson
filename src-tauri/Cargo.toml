@@ -1,6 +1,6 @@
 [package]
 name = "json-vis"
-version = "0.1.1"
+version = "0.1.2"
 description = "High-performance JSON visualization and data quality tool"
 authors = ["Jonathan Koch"]
 license = "AGPL-3.0-or-later"

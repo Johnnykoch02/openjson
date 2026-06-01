@@ -1,14 +1,22 @@
 import Dagre from "@dagrejs/dagre";
 import type { Edge, Node } from "@xyflow/react";
+import { DAGRE_LAYOUT_THRESHOLD, NODE_HEIGHT, NODE_WIDTH } from "./limits";
 
-export const NODE_WIDTH = 248;
-export const NODE_HEIGHT = 64;
+export { NODE_WIDTH, NODE_HEIGHT };
+
+const GRID_COLS = 8;
+const GRID_X_GAP = 280;
+const GRID_Y_GAP = 80;
 
 export function layoutGraph(
   nodes: Node[],
   edges: Edge[],
   direction: "LR" | "TB" = "LR",
 ): Node[] {
+  if (nodes.length > DAGRE_LAYOUT_THRESHOLD) {
+    return layoutGrid(nodes);
+  }
+
   const graph = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   graph.setGraph({ rankdir: direction, nodesep: 28, ranksep: 90, marginx: 40, marginy: 40 });
 
@@ -28,6 +36,20 @@ export function layoutGraph(
       position: {
         x: position.x - NODE_WIDTH / 2,
         y: position.y - NODE_HEIGHT / 2,
+      },
+    };
+  });
+}
+
+function layoutGrid(nodes: Node[]): Node[] {
+  return nodes.map((node, index) => {
+    const col = index % GRID_COLS;
+    const row = Math.floor(index / GRID_COLS);
+    return {
+      ...node,
+      position: {
+        x: col * GRID_X_GAP,
+        y: row * (NODE_HEIGHT + GRID_Y_GAP),
       },
     };
   });

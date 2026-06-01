@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { queryDocument } from "../lib/api";
+import { MAX_SLICE_NODES } from "../lib/limits";
 import type { QueryResult } from "../types";
 
 interface QueryPanelProps {
@@ -24,7 +25,7 @@ export function QueryPanel({ documentId }: QueryPanelProps) {
     setRunning(true);
     setError(null);
     try {
-      const res = await queryDocument(documentId, q, 500);
+      const res = await queryDocument(documentId, q, MAX_SLICE_NODES);
       setResult(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

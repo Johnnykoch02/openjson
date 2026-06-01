@@ -97,7 +97,7 @@
       h2.section-title { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 0 0 8px; }
       p.section-sub { text-align: center; color: var(--text-dim); margin: 0 auto 36px; max-width: 560px; }
 
-      .downloads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .downloads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
       .dl-card {
         border: 1px solid var(--border); border-radius: 16px; background: var(--surface);
         padding: 26px 22px; text-align: center; transition: border-color .15s, transform .15s;
@@ -133,6 +133,9 @@
       .foot-inner { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
       .foot-inner a { color: var(--text-dim); }
 
+      @media (max-width: 960px) {
+        .downloads { grid-template-columns: repeat(2, 1fr); }
+      }
       @media (max-width: 760px) {
         .downloads, .features { grid-template-columns: 1fr; }
         .nav-links a:not(.btn) { display: none; }
@@ -144,6 +147,7 @@
       <div class="wrap nav-inner">
         <div class="brand"><span class="mark">{}</span> OpenJSON</div>
         <nav class="nav-links">
+          <a href="app/">Web app</a>
           <a href="#download">Download</a>
           <a href="#features">Features</a>
           <a id="repo-link" href="#">GitHub</a>
@@ -163,6 +167,7 @@
           </p>
           <div class="cta-row">
             <a class="btn primary" id="hero-download" href="#download">⬇ Download for your OS</a>
+            <a class="btn" id="hero-web" href="app/">🌐 Open in browser</a>
             <a class="btn coffee" href="https://buymeacoffee.com/johnnykoch0" target="_blank" rel="noopener">☕ Buy me a coffee</a>
           </div>
           <div class="hint" id="hero-version">Loading latest release…</div>
@@ -178,8 +183,15 @@
       <section id="download">
         <div class="wrap">
           <h2 class="section-title">Download</h2>
-          <p class="section-sub">Latest stable release. Pick your platform — installation is one click.</p>
+          <p class="section-sub">Latest stable release. Pick your platform — or use the browser version, no install required.</p>
           <div class="downloads">
+            <div class="dl-card">
+              <div class="dl-os">🌐</div>
+              <h3>Browser</h3>
+              <div class="arch">No install · files stay in your browser</div>
+              <a class="btn primary" id="dl-web" href="app/">Open web app</a>
+              <div class="filemeta">Best for moderate file sizes</div>
+            </div>
             <div class="dl-card">
               <div class="dl-os">🪟</div>
               <h3>Windows</h3>

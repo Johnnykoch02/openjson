@@ -16,6 +16,16 @@ export interface DocumentMeta {
   top_level_keys: string[];
 }
 
+export interface FileLoadError {
+  name: string;
+  message: string;
+}
+
+export interface OpenFilesResult {
+  opened: DocumentMeta[];
+  errors: FileLoadError[];
+}
+
 export interface InferredField {
   path: string;
   name: string;
@@ -63,6 +73,16 @@ export interface GraphEdge {
   source: string;
   target: string;
   label?: string | null;
+}
+
+export interface ChildrenSlice {
+  parent_path: string;
+  parent_id: string;
+  total_children: number;
+  offset: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  has_more: boolean;
 }
 
 export interface GraphSnapshot {

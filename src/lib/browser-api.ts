@@ -1,4 +1,5 @@
 import type {
+  ChildrenSlice,
   DocumentMeta,
   FieldAgreement,
   GraphSnapshot,
@@ -10,6 +11,7 @@ import type {
   RecordDiffSummary,
   SchemaDiff,
 } from "../types";
+import { DEFAULT_EXPAND_DEPTH, DEFAULT_PAGE_SIZE, MAX_SLICE_NODES } from "./limits";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
@@ -157,22 +159,34 @@ function parseDocument(name: string, text: string): JsonValue {
   }
   try {
     return JSON.parse(text) as JsonValue;
-  } catch (err) {
+  } catch (jsonErr) {
     try {
       return parseNdjson(text);
-    } catch {
-      throw err;
+    } catch (ndjsonErr) {
+      const ndjsonMessage = ndjsonErr instanceof Error ? ndjsonErr.message : String(ndjsonErr);
+      if (ndjsonMessage.startsWith("line ")) {
+        throw new Error(`${name}: ${ndjsonMessage}`);
+      }
+      const jsonMessage = jsonErr instanceof SyntaxError ? jsonErr.message : String(jsonErr);
+      throw new Error(`${name}: invalid JSON — ${jsonMessage}`);
     }
   }
 }
 
 function parseNdjson(text: string): JsonValue {
   const items: JsonValue[] = [];
-  text.split(/\r?\n/).forEach((line) => {
-    const trimmed = line.trim();
-    if (trimmed) items.push(JSON.parse(trimmed) as JsonValue);
-  });
-  if (items.length === 0) throw new Error("No JSON records found");
+  const lines = text.split(/\r?\n/);
+  for (let lineNo = 0; lineNo < lines.length; lineNo += 1) {
+    const trimmed = lines[lineNo]!.trim();
+    if (!trimmed) continue;
+    try {
+      items.push(JSON.parse(trimmed) as JsonValue);
+    } catch (err) {
+      const detail = err instanceof SyntaxError ? err.message : String(err);
+      throw new Error(`line ${lineNo + 1}: ${detail}`);
+    }
+  }
+  if (items.length === 0) throw new Error("no JSON records found (empty file)");
   return items;
 }
 
@@ -222,8 +236,8 @@ export async function getSchema(documentId: string): Promise<InferredSchema> {
 
 export async function getGraph(
   documentId: string,
-  maxNodes = 250,
-  expandDepth = 2,
+  maxNodes = MAX_SLICE_NODES,
+  expandDepth = DEFAULT_EXPAND_DEPTH,
 ): Promise<GraphSnapshot> {
   const doc = documents.get(documentId);
   if (!doc) throw new Error(`Document ${documentId} not found`);
@@ -233,7 +247,7 @@ export async function getGraph(
 export async function expandPath(
   documentId: string,
   path: string,
-  maxNodes = 250,
+  maxNodes = MAX_SLICE_NODES,
 ): Promise<GraphSnapshot> {
   const doc = documents.get(documentId);
   if (!doc) throw new Error(`Document ${documentId} not found`);
@@ -260,10 +274,21 @@ export async function expandPath(
   return { nodes, edges, truncated, total_nodes: nodes.length };
 }
 
+export async function listChildren(
+  documentId: string,
+  path: string,
+  offset = 0,
+  limit = DEFAULT_PAGE_SIZE,
+): Promise<ChildrenSlice> {
+  const doc = documents.get(documentId);
+  if (!doc) throw new Error(`Document ${documentId} not found`);
+  return listChildrenOf(doc.value, path, offset, Math.min(limit, MAX_SLICE_NODES));
+}
+
 export async function runQuery(
   documentId: string,
   query: string,
-  limit = 500,
+  limit = MAX_SLICE_NODES,
 ): Promise<QueryResult> {
   const doc = documents.get(documentId);
   if (!doc) throw new Error(`Document ${documentId} not found`);
@@ -431,7 +456,7 @@ export async function compareRecords(
   leftId: string,
   rightId: string,
   keyField?: string,
-  maxRecords = 500,
+  maxRecords = MAX_SLICE_NODES,
 ): Promise<RecordDiffSummary> {
   const left = documents.get(leftId);
   const right = documents.get(rightId);
@@ -451,6 +476,90 @@ function resolvePath(value: JsonValue, path: string): JsonValue {
     else return current;
   }
   return current;
+}
+
+function pathToId(path: string): string {
+  return path === "" ? "root" : path.replace(/[.[\]]/g, "_");
+}
+
+function listChildrenOf(
+  value: JsonValue,
+  path: string,
+  offset: number,
+  limit: number,
+): ChildrenSlice {
+  const target = resolvePath(value, path);
+  const parentId = pathToId(path);
+  const nodes: GraphSnapshot["nodes"] = [];
+  const edges: GraphSnapshot["edges"] = [];
+  const pageLimit = Math.max(1, limit);
+
+  if (Array.isArray(target)) {
+    const total = target.length;
+    for (let index = 0; index < total; index += 1) {
+      if (index < offset) continue;
+      if (nodes.length >= pageLimit) break;
+      const child = target[index]!;
+      const childPath = path === "" ? `[${index}]` : `${path}[${index}]`;
+      const id = pathToId(childPath);
+      nodes.push(makeNode(id, `[${index}]`, "item", childPath, child));
+      edges.push({
+        id: `${parentId}-${id}`,
+        source: parentId,
+        target: id,
+        label: `[${index}]`,
+      });
+    }
+    const returned = nodes.length;
+    return {
+      parent_path: path,
+      parent_id: parentId,
+      total_children: total,
+      offset,
+      nodes,
+      edges,
+      has_more: offset + returned < total,
+    };
+  }
+
+  if (target && typeof target === "object") {
+    const entries = Object.entries(target);
+    const total = entries.length;
+    for (let index = 0; index < total; index += 1) {
+      if (index < offset) continue;
+      if (nodes.length >= pageLimit) break;
+      const [key, child] = entries[index]!;
+      const childPath = path === "" ? key : `${path}.${key}`;
+      const id = pathToId(childPath);
+      nodes.push(makeNode(id, key, "property", childPath, child));
+      edges.push({
+        id: `${parentId}-${id}`,
+        source: parentId,
+        target: id,
+        label: key,
+      });
+    }
+    const returned = nodes.length;
+    return {
+      parent_path: path,
+      parent_id: parentId,
+      total_children: total,
+      offset,
+      nodes,
+      edges,
+      has_more: offset + returned < total,
+    };
+  }
+
+  return {
+    parent_path: path,
+    parent_id: parentId,
+    total_children: 0,
+    offset,
+    nodes,
+    edges,
+    has_more: false,
+  };
 }
 
 function buildGraph(value: JsonValue, maxNodes: number, expandDepth: number): GraphSnapshot {

@@ -6,9 +6,10 @@ import {
   getSchema,
   keyFieldCandidates,
   listDocuments,
-  loadJsonText,
+  loadDroppedFiles,
   pickAndOpenFiles,
 } from "./lib/api";
+import { formatLoadErrors } from "./lib/load-files";
 import { useWorkspace } from "./stores/workspace";
 import { ComparePanel } from "./components/ComparePanel";
 import { EmptyState } from "./components/EmptyState";
@@ -89,9 +90,12 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const opened = await pickAndOpenFiles();
+      const result = await pickAndOpenFiles();
       const docs = await syncDocuments();
-      adoptOpened(docs, opened.map((d) => d.id));
+      adoptOpened(docs, result.opened.map((d) => d.id));
+      if (result.errors.length > 0) {
+        setError(formatLoadErrors(result.errors, result.opened.length));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -103,13 +107,12 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      const opened = [];
-      for (const file of files) {
-        const text = await file.text();
-        opened.push(await loadJsonText(file.name, text));
-      }
+      const result = await loadDroppedFiles(files);
       const docs = await syncDocuments();
-      adoptOpened(docs, opened.map((d) => d.id));
+      adoptOpened(docs, result.opened.map((d) => d.id));
+      if (result.errors.length > 0) {
+        setError(formatLoadErrors(result.errors, result.opened.length));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

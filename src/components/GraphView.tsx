@@ -10,7 +10,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { expandGraphPath, getGraph } from "../lib/api";
+import { getGraph, listChildren } from "../lib/api";
+import { DEFAULT_EXPAND_DEPTH, MAX_SLICE_NODES } from "../lib/limits";
 import { layoutGraph } from "../lib/layout";
 import type { GraphEdge, GraphNode, NodeKind } from "../types";
 import { JsonFlowNode, type JsonNodeData } from "./JsonFlowNode";
@@ -32,8 +33,6 @@ const minimapColor: Record<NodeKind, string> = {
 interface GraphViewProps {
   documentId: string | null;
 }
-
-const GRAPH_MAX_NODES = 99999;
 
 export function GraphView({ documentId }: GraphViewProps) {
   const [rawNodes, setRawNodes] = useState<GraphNode[]>([]);
@@ -61,7 +60,7 @@ export function GraphView({ documentId }: GraphViewProps) {
     }
     let cancelled = false;
     setLoading(true);
-    getGraph(documentId, GRAPH_MAX_NODES, 1)
+    getGraph(documentId, MAX_SLICE_NODES, DEFAULT_EXPAND_DEPTH)
       .then((snapshot) => {
         if (cancelled) return;
         setRawNodes(snapshot.nodes);
@@ -102,19 +101,20 @@ export function GraphView({ documentId }: GraphViewProps) {
   const expand = useCallback(
     async (node: GraphNode) => {
       if (!documentId) return;
-      const snapshot = await expandGraphPath(documentId, node.path, GRAPH_MAX_NODES);
+      const slice = await listChildren(documentId, node.path, 0, MAX_SLICE_NODES);
       setRawNodes((nodes) => {
         const seen = new Set(nodes.map((n) => n.id));
-        const additions = snapshot.nodes.filter((n) => !seen.has(n.id));
+        const additions = slice.nodes.filter((n) => !seen.has(n.id));
         return [...nodes, ...additions];
       });
       setRawEdges((edges) => {
         const seen = new Set(edges.map((e) => e.id));
-        const additions = snapshot.edges.filter((e) => !seen.has(e.id));
+        const additions = slice.edges.filter((e) => !seen.has(e.id));
         const next = [...edges, ...additions];
         rebuildChildIndex(next);
         return next;
       });
+      if (slice.has_more) setTruncated(true);
       setExpanded((prev) => new Set(prev).add(node.id));
     },
     [documentId, rebuildChildIndex],
@@ -160,7 +160,7 @@ export function GraphView({ documentId }: GraphViewProps) {
         {loading && <span className="graph-status-loading">loading…</span>}
         {truncated && (
           <span className="graph-status-warn">
-            capped at {GRAPH_MAX_NODES.toLocaleString()} nodes — use <strong>Data</strong> for full list
+            capped at {MAX_SLICE_NODES.toLocaleString()} nodes — use <strong>Data</strong> for full list
           </span>
         )}
       </div>

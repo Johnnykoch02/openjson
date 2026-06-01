@@ -2,13 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type {
+  ChildrenSlice,
   DocumentMeta,
   GraphSnapshot,
   InferredSchema,
+  OpenFilesResult,
   QueryResult,
   RecordDiffSummary,
   SchemaDiff,
 } from "../types";
+import { loadBrowserFiles, loadBrowserTexts } from "./load-files";
+import { DEFAULT_EXPAND_DEPTH, DEFAULT_PAGE_SIZE, MAX_SLICE_NODES } from "./limits";
 
 const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -21,15 +25,15 @@ async function getBrowserApi() {
   return browserApi;
 }
 
-export async function pickAndOpenFiles(): Promise<DocumentMeta[]> {
+export async function pickAndOpenFiles(): Promise<OpenFilesResult> {
   if (isTauri()) {
     const selected = await open({
       multiple: true,
       filters: [{ name: "JSON", extensions: ["json", "jsonl", "ndjson"] }],
     });
-    if (!selected) return [];
+    if (!selected) return { opened: [], errors: [] };
     const paths = Array.isArray(selected) ? selected : [selected];
-    return invoke<DocumentMeta[]>("open_json_files", { paths });
+    return invoke<OpenFilesResult>("open_json_files", { paths });
   }
 
   return new Promise((resolve) => {
@@ -40,13 +44,15 @@ export async function pickAndOpenFiles(): Promise<DocumentMeta[]> {
     input.onchange = async () => {
       const api = await getBrowserApi();
       const files = Array.from(input.files ?? []);
-      const opened = await Promise.all(
-        files.map((file) => api.loadFile(file)),
-      );
-      resolve(opened);
+      resolve(await loadBrowserFiles((file) => api.loadFile(file), files));
     };
     input.click();
   });
+}
+
+export async function loadDroppedFiles(files: File[]): Promise<OpenFilesResult> {
+  const api = await getBrowserApi();
+  return loadBrowserTexts((name, text) => api.loadText(name, text), files);
 }
 
 export async function loadJsonText(name: string, text: string): Promise<DocumentMeta> {
@@ -83,8 +89,8 @@ export async function getSchema(documentId: string): Promise<InferredSchema> {
 
 export async function getGraph(
   documentId: string,
-  maxNodes = 250,
-  expandDepth = 2,
+  maxNodes = MAX_SLICE_NODES,
+  expandDepth = DEFAULT_EXPAND_DEPTH,
 ): Promise<GraphSnapshot> {
   if (isTauri()) {
     return invoke<GraphSnapshot>("get_graph", {
@@ -100,7 +106,7 @@ export async function getGraph(
 export async function expandGraphPath(
   documentId: string,
   path: string,
-  maxNodes = 250,
+  maxNodes = MAX_SLICE_NODES,
 ): Promise<GraphSnapshot> {
   if (isTauri()) {
     return invoke<GraphSnapshot>("expand_graph_path", {
@@ -113,10 +119,28 @@ export async function expandGraphPath(
   return api.expandPath(documentId, path, maxNodes);
 }
 
+export async function listChildren(
+  documentId: string,
+  path: string,
+  offset = 0,
+  limit = DEFAULT_PAGE_SIZE,
+): Promise<ChildrenSlice> {
+  if (isTauri()) {
+    return invoke<ChildrenSlice>("list_children", {
+      documentId,
+      path,
+      offset,
+      limit,
+    });
+  }
+  const api = await getBrowserApi();
+  return api.listChildren(documentId, path, offset, limit);
+}
+
 export async function queryDocument(
   documentId: string,
   query: string,
-  limit = 500,
+  limit = MAX_SLICE_NODES,
 ): Promise<QueryResult> {
   if (isTauri()) {
     return invoke<QueryResult>("query_document", { documentId, query, limit });
@@ -140,7 +164,7 @@ export async function compareRecords(
   leftId: string,
   rightId: string,
   keyField?: string,
-  maxRecords = 500,
+  maxRecords = MAX_SLICE_NODES,
 ): Promise<RecordDiffSummary> {
   if (isTauri()) {
     return invoke<RecordDiffSummary>("compare_records", {
@@ -204,3 +228,5 @@ export function formatBytes(size: number): string {
   }
   return unit === 0 ? `${size} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
 }
+
+export { DEFAULT_PAGE_SIZE, MAX_SLICE_NODES } from "./limits";

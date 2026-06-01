@@ -2,13 +2,29 @@ mod state;
 
 use json_vis_core::{
     build_graph, candidate_key_fields, diff_records, diff_schemas, expand_path, find_record,
-    run_query, value_at, DocumentMeta, GraphSnapshot, InferredSchema, QueryResult,
-    RecordDiffSummary, SchemaDiff,
+    list_children, run_query, value_at, ChildrenSlice, DocumentMeta, GraphSnapshot, InferredSchema,
+    QueryResult, RecordDiffSummary, SchemaDiff, DEFAULT_EXPAND_DEPTH, DEFAULT_PAGE_SIZE,
+    MAX_SLICE_NODES,
 };
+use serde::Serialize;
 use serde_json::Value;
 use state::{AppState, StoredDocument};
 use std::fs;
 use tauri::State;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileLoadError {
+    name: String,
+    message: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OpenFilesResult {
+    opened: Vec<DocumentMeta>,
+    errors: Vec<FileLoadError>,
+}
 
 #[tauri::command]
 fn list_documents(state: State<'_, AppState>) -> Vec<DocumentMeta> {
@@ -22,8 +38,9 @@ fn list_documents(state: State<'_, AppState>) -> Vec<DocumentMeta> {
 }
 
 #[tauri::command]
-fn open_json_files(paths: Vec<String>, state: State<'_, AppState>) -> Result<Vec<DocumentMeta>, String> {
+fn open_json_files(paths: Vec<String>, state: State<'_, AppState>) -> OpenFilesResult {
     let mut opened = Vec::new();
+    let mut errors = Vec::new();
     let mut store = state.documents.lock().unwrap();
 
     for path in paths {
@@ -32,15 +49,35 @@ fn open_json_files(paths: Vec<String>, state: State<'_, AppState>) -> Result<Vec
             .and_then(|part| part.to_str())
             .unwrap_or("document.json")
             .to_string();
-        let bytes = fs::read(&path).map_err(|err| format!("Failed to read {path}: {err}"))?;
+
+        let bytes = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(err) => {
+                errors.push(FileLoadError {
+                    name: name.clone(),
+                    message: format!("could not read file: {err}"),
+                });
+                continue;
+            }
+        };
+
         let id = uuid::Uuid::new_v4().to_string();
-        let document = StoredDocument::from_bytes(id.clone(), name, bytes)?;
-        let meta = document.meta();
-        store.insert(id, document);
-        opened.push(meta);
+        match StoredDocument::from_bytes(id.clone(), name.clone(), bytes) {
+            Ok(document) => {
+                let meta = document.meta();
+                store.insert(id, document);
+                opened.push(meta);
+            }
+            Err(err) => {
+                errors.push(FileLoadError {
+                    name,
+                    message: err,
+                });
+            }
+        }
     }
 
-    Ok(opened)
+    OpenFilesResult { opened, errors }
 }
 
 #[tauri::command]
@@ -73,39 +110,66 @@ fn get_schema(document_id: String, state: State<'_, AppState>) -> Result<Inferre
 }
 
 #[tauri::command]
-fn get_graph(
+async fn get_graph(
     document_id: String,
     max_nodes: Option<u32>,
     expand_depth: Option<u32>,
     state: State<'_, AppState>,
 ) -> Result<GraphSnapshot, String> {
-    let store = state.documents.lock().unwrap();
-    let document = store
-        .get(&document_id)
-        .ok_or_else(|| format!("Document {document_id} not found"))?;
-    Ok(build_graph(
-        &document.value,
-        max_nodes.unwrap_or(250),
-        expand_depth.unwrap_or(2),
-    ))
+    let value = {
+        let store = state.documents.lock().unwrap();
+        let document = store
+            .get(&document_id)
+            .ok_or_else(|| format!("Document {document_id} not found"))?;
+        document.value.clone()
+    };
+    let max_nodes = max_nodes.unwrap_or(MAX_SLICE_NODES);
+    let expand_depth = expand_depth.unwrap_or(DEFAULT_EXPAND_DEPTH);
+    tauri::async_runtime::spawn_blocking(move || build_graph(&value, max_nodes, expand_depth))
+        .await
+        .map_err(|err| format!("graph task failed: {err}"))
 }
 
 #[tauri::command]
-fn expand_graph_path(
+async fn expand_graph_path(
     document_id: String,
     path: String,
     max_nodes: Option<u32>,
     state: State<'_, AppState>,
 ) -> Result<GraphSnapshot, String> {
-    let store = state.documents.lock().unwrap();
-    let document = store
-        .get(&document_id)
-        .ok_or_else(|| format!("Document {document_id} not found"))?;
-    Ok(expand_path(
-        &document.value,
-        &path,
-        max_nodes.unwrap_or(250),
-    ))
+    let value = {
+        let store = state.documents.lock().unwrap();
+        let document = store
+            .get(&document_id)
+            .ok_or_else(|| format!("Document {document_id} not found"))?;
+        document.value.clone()
+    };
+    let max_nodes = max_nodes.unwrap_or(MAX_SLICE_NODES);
+    tauri::async_runtime::spawn_blocking(move || expand_path(&value, &path, max_nodes))
+        .await
+        .map_err(|err| format!("expand task failed: {err}"))
+}
+
+#[tauri::command]
+async fn list_children(
+    document_id: String,
+    path: String,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<ChildrenSlice, String> {
+    let value = {
+        let store = state.documents.lock().unwrap();
+        let document = store
+            .get(&document_id)
+            .ok_or_else(|| format!("Document {document_id} not found"))?;
+        document.value.clone()
+    };
+    let offset = offset.unwrap_or(0);
+    let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_SLICE_NODES);
+    tauri::async_runtime::spawn_blocking(move || list_children(&value, &path, offset, limit))
+        .await
+        .map_err(|err| format!("list children task failed: {err}"))
 }
 
 #[tauri::command]
@@ -148,7 +212,7 @@ fn compare_records(
         &left.value,
         &right.value,
         key_field.as_deref(),
-        max_records.unwrap_or(500),
+        max_records.unwrap_or(MAX_SLICE_NODES as usize),
     )
 }
 
@@ -206,7 +270,11 @@ fn query_document(
     let document = store
         .get(&document_id)
         .ok_or_else(|| format!("Document {document_id} not found"))?;
-    run_query(&document.value, &query, limit.unwrap_or(500))
+    run_query(
+        &document.value,
+        &query,
+        limit.unwrap_or(MAX_SLICE_NODES as usize),
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -223,6 +291,7 @@ pub fn run() {
             get_schema,
             get_graph,
             expand_graph_path,
+            list_children,
             compare_schemas,
             compare_records,
             query_document,

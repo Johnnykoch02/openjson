@@ -1,0 +1,4 @@
+pub const MAX_SLICE_NODES: u32 = 99_999;
+pub const DEFAULT_PAGE_SIZE: u32 = 200;
+pub const DEFAULT_EXPAND_DEPTH: u32 = 1;
+pub const DAGRE_LAYOUT_THRESHOLD: u32 = 500;

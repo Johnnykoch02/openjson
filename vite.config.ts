@@ -4,8 +4,12 @@ import react from "@vitejs/plugin-react";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+// Relative base for GitHub Pages (works at /openjson/app/ and custom-domain /app/).
+const base = process.env.GITHUB_PAGES === "true" ? "./" : "/";
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  base,
   plugins: [react()],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
