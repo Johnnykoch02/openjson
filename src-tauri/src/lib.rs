@@ -2,9 +2,9 @@ mod state;
 
 use json_vis_core::{
     build_graph, candidate_key_fields, diff_records, diff_schemas, expand_path, find_record,
-    list_children, run_query, value_at, ChildrenSlice, DocumentMeta, GraphSnapshot, InferredSchema,
-    QueryResult, RecordDiffSummary, SchemaDiff, DEFAULT_EXPAND_DEPTH, DEFAULT_PAGE_SIZE,
-    MAX_SLICE_NODES,
+    list_children as graph_list_children, run_query, value_at, ChildrenSlice, DocumentMeta,
+    GraphSnapshot, InferredSchema, QueryResult, RecordDiffSummary, SchemaDiff, DEFAULT_EXPAND_DEPTH,
+    DEFAULT_PAGE_SIZE, MAX_SLICE_NODES,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -167,7 +167,7 @@ async fn list_children(
     };
     let offset = offset.unwrap_or(0);
     let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_SLICE_NODES);
-    tauri::async_runtime::spawn_blocking(move || list_children(&value, &path, offset, limit))
+    tauri::async_runtime::spawn_blocking(move || graph_list_children(&value, &path, offset, limit))
         .await
         .map_err(|err| format!("list children task failed: {err}"))
 }
