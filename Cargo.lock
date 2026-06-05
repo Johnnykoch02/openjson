@@ -1893,7 +1893,7 @@ dependencies = [
 
 [[package]]
 name = "json-vis"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "json-vis-core",
  "serde",
@@ -1907,7 +1907,7 @@ dependencies = [
 
 [[package]]
 name = "json-vis-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "indexmap 2.14.0",
  "serde",
