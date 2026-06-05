@@ -196,6 +196,7 @@ function App() {
           activeId={activeId}
           loading={loading}
           onOpenFiles={handleOpenFiles}
+          onDropFiles={handleDropFiles}
           onSelect={setActiveId}
           onClose={handleClose}
         />

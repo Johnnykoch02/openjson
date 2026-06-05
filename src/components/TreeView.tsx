@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getValue, listChildren } from "../lib/api";
+import { copyValueToClipboard } from "../lib/clipboard";
 import { DEFAULT_PAGE_SIZE } from "../lib/limits";
 import { useWorkspace } from "../stores/workspace";
 import type { GraphNode } from "../types";
+import { ContextMenu } from "./ContextMenu";
 import { ChevronRight } from "./icons";
 
 interface TreeViewProps {
@@ -47,6 +49,11 @@ export function TreeView({ documentId }: TreeViewProps) {
   const [loading, setLoading] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    node: GraphNode;
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const mergeSlice = useCallback((slice: Awaited<ReturnType<typeof listChildren>>, append: boolean) => {
@@ -180,6 +187,21 @@ export function TreeView({ documentId }: TreeViewProps) {
     [documentId, openInspector],
   );
 
+  const copyNodeValue = useCallback(
+    async (node: GraphNode) => {
+      if (!documentId) return;
+      const value = await getValue(documentId, node.path);
+      await copyValueToClipboard(value);
+    },
+    [documentId],
+  );
+
+  const openValueMenu = useCallback((event: React.MouseEvent, node: GraphNode) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ x: event.clientX, y: event.clientY, node });
+  }, []);
+
   const collapseAll = useCallback(() => setExpanded(new Set()), []);
   const expandLoaded = useCallback(() => setExpanded(new Set(loadedParents)), [loadedParents]);
 
@@ -220,6 +242,7 @@ export function TreeView({ documentId }: TreeViewProps) {
       pagination={pagination}
       onToggle={toggle}
       onInspect={inspect}
+      onValueContextMenu={openValueMenu}
       onLoadMore={loadMore}
     />
   );
@@ -260,6 +283,20 @@ export function TreeView({ documentId }: TreeViewProps) {
           </button>
         )}
       </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            {
+              label: "Copy to clipboard",
+              onClick: () => void copyNodeValue(contextMenu.node),
+            },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }
@@ -274,6 +311,7 @@ interface TreeRowProps {
   pagination: Map<string, PageState>;
   onToggle: (node: GraphNode) => void;
   onInspect: (node: GraphNode) => void;
+  onValueContextMenu: (event: React.MouseEvent, node: GraphNode) => void;
   onLoadMore: (parentId: string, path: string) => void;
 }
 
@@ -287,6 +325,7 @@ function TreeRow({
   pagination,
   onToggle,
   onInspect,
+  onValueContextMenu,
   onLoadMore,
 }: TreeRowProps) {
   const node = nodeById.get(nodeId);
@@ -314,7 +353,23 @@ function TreeRow({
         >
           <span className="tree-key">{node.label}</span>
           <span className={`tree-type type-${node.kind}`}>{node.kind}</span>
-          {node.value_preview && <span className="tree-preview">{node.value_preview}</span>}
+          {node.value_preview ? (
+            <span
+              className="tree-preview"
+              onContextMenu={(event) => onValueContextMenu(event, node)}
+            >
+              {node.value_preview}
+            </span>
+          ) : (
+            !node.expandable && (
+              <span
+                className="tree-preview tree-preview-empty"
+                onContextMenu={(event) => onValueContextMenu(event, node)}
+              >
+                —
+              </span>
+            )
+          )}
         </button>
       </div>
       {isOpen && node.expandable && (
@@ -331,6 +386,7 @@ function TreeRow({
               pagination={pagination}
               onToggle={onToggle}
               onInspect={onInspect}
+              onValueContextMenu={onValueContextMenu}
               onLoadMore={onLoadMore}
             />
           ))}

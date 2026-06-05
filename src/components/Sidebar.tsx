@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import { formatBytes, openExternal } from "../lib/api";
 import { DONATE_URL } from "../lib/links";
 import type { DocumentMeta } from "../types";
@@ -8,6 +9,7 @@ interface SidebarProps {
   activeId: string | null;
   loading: boolean;
   onOpenFiles: () => void;
+  onDropFiles: (files: File[]) => void;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
 }
@@ -17,11 +19,41 @@ export function Sidebar({
   activeId,
   loading,
   onOpenFiles,
+  onDropFiles,
   onSelect,
   onClose,
 }: SidebarProps) {
+  const [dragging, setDragging] = useState(false);
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+      setDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      setDragging(false);
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length > 0) onDropFiles(files);
+    },
+    [onDropFiles],
+  );
+
   return (
-    <aside className="sidebar">
+    <aside
+      className={`sidebar ${dragging ? "sidebar-dragging" : ""}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="sidebar-header">
         <span className="sidebar-title">Datasets</span>
         <button className="icon-btn" onClick={onOpenFiles} disabled={loading} title="Add files">
@@ -30,8 +62,16 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-list">
-        {documents.length === 0 && (
-          <div className="sidebar-empty">No files yet. Add JSON to begin.</div>
+        {dragging && (
+          <div className="sidebar-drop-hint">
+            <strong>Drop JSON files here</strong>
+            <span>Add any number of .json, .jsonl, or .ndjson files</span>
+          </div>
+        )}
+        {documents.length === 0 && !dragging && (
+          <div className="sidebar-empty">
+            No files yet. Drop JSON here or click + to browse.
+          </div>
         )}
         {documents.map((doc) => (
           <button
