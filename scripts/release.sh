@@ -86,20 +86,38 @@ echo ""
 echo "After push, .github/workflows/release.yml builds draft installers."
 echo ""
 
-bump_file() {
+bump_json_version() {
   local file="$1"
-  local pattern="$2"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "+ bump $file -> $VERSION"
-  else
-    sed -i "s/${pattern}/${VERSION}/" "$file"
+    echo "+ $file: \"version\": \"${VERSION}\""
+    return
   fi
+  node -e "
+    const fs = require('fs');
+    const [path, version] = process.argv.slice(1);
+    const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+    data.version = version;
+    fs.writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+  " "$file" "$VERSION"
 }
 
-bump_file package.json '"version": "[0-9.]\+"' '"version": "'"$VERSION"'"'
-bump_file src-tauri/tauri.conf.json '"version": "[0-9.]\+"' '"version": "'"$VERSION"'"'
-bump_file src-tauri/Cargo.toml '^version = "[0-9.]\+"' 'version = "'"$VERSION"'"'
-bump_file crates/json-vis-core/Cargo.toml '^version = "[0-9.]\+"' 'version = "'"$VERSION"'"'
+bump_cargo_version() {
+  local file="$1"
+  local line="version = \"${VERSION}\""
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "+ $file: ${line}"
+    return
+  fi
+  if ! grep -q '^version = ' "$file"; then
+    die "no version line in $file"
+  fi
+  sed -i "s/^version = \".*\"/${line}/" "$file"
+}
+
+bump_json_version package.json
+bump_json_version src-tauri/tauri.conf.json
+bump_cargo_version src-tauri/Cargo.toml
+bump_cargo_version crates/json-vis-core/Cargo.toml
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
   (cd src-tauri && cargo check -q)
